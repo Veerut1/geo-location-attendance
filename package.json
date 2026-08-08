@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "python3 -m http.server 5173",
-    "test": "node --test"
+    "test": "node --test",
+    "generate-config": "node scripts/generate-firebase-config.js"
   },
   "dependencies": {
     "firebase-tools": "^15.26.0"

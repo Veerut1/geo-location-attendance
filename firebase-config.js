@@ -1,3 +1,1 @@
 window.ATTENDANCE_USE_FIRESTORE = true;
-
-window.ATTENDANCE_FIREBASE_CONFIG = null;
