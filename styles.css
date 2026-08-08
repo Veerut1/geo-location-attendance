@@ -1,0 +1,418 @@
+:root {
+  color-scheme: light;
+  --ink: #17202a;
+  --muted: #667085;
+  --line: #d8dee8;
+  --surface: #ffffff;
+  --background: #eef3f7;
+  --primary: #0b6bcb;
+  --primary-dark: #084f96;
+  --success: #087f5b;
+  --warning: #b54708;
+  --danger: #b42318;
+  --shadow: 0 18px 60px rgba(16, 24, 40, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: var(--ink);
+  background:
+    linear-gradient(135deg, rgba(11, 107, 203, 0.1), transparent 32%),
+    linear-gradient(315deg, rgba(8, 127, 91, 0.1), transparent 28%),
+    var(--background);
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1,
+h2,
+p,
+dl {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.1rem;
+}
+
+.app-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+#current-day {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.view-switch,
+.tabs {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.view-tab,
+.tab {
+  min-height: 38px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  padding: 0 14px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.view-tab:last-child,
+.tab:last-child {
+  border-right: 0;
+}
+
+.view-tab.is-active,
+.tab.is-active {
+  background: var(--ink);
+  color: #fff;
+}
+
+.view.is-active {
+  display: grid;
+}
+
+#employee-view {
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 20px;
+}
+
+.admin-view.is-active {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.attendance-panel,
+.result-panel,
+.admin-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.attendance-panel {
+  padding: 28px;
+  min-height: 540px;
+  display: flex;
+  flex-direction: column;
+}
+
+.employee-form {
+  margin-top: 30px;
+  display: grid;
+  gap: 8px;
+}
+
+.employee-form label,
+.config-form label {
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+.employee-form select,
+.config-form input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.welcome-block {
+  margin: auto 0;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.welcome-block span {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.welcome-block strong {
+  font-size: clamp(2rem, 8vw, 3.4rem);
+  line-height: 1;
+}
+
+.welcome-block time {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.check-in-button,
+.config-form button,
+.secondary-button,
+.row-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.check-in-button {
+  width: 100%;
+  min-height: 58px;
+}
+
+.check-in-button:hover,
+.config-form button:hover,
+.secondary-button:hover,
+.row-button:hover {
+  background: var(--primary-dark);
+}
+
+.check-in-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.secondary-button {
+  padding: 0 14px;
+  background: var(--success);
+}
+
+.row-button {
+  min-height: 32px;
+  padding: 0 10px;
+  background: #475467;
+  font-size: 0.82rem;
+}
+
+.status-line {
+  min-height: 24px;
+  margin-top: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.status-line.is-error {
+  color: var(--danger);
+}
+
+.result-panel,
+.admin-card {
+  padding: 24px;
+  align-self: start;
+}
+
+.success-mark {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(8, 127, 91, 0.12);
+  color: var(--success);
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+.success-mark.is-warning {
+  background: rgba(181, 71, 8, 0.12);
+  color: var(--warning);
+}
+
+.result-panel h2 {
+  margin-top: 14px;
+}
+
+.result-list {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.result-list div {
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.result-list dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.result-list dd {
+  margin: 5px 0 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.config-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.config-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.config-form button {
+  align-self: end;
+  padding: 0 14px;
+}
+
+.radius-note {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.reports-card {
+  grid-column: 1 / -1;
+}
+
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.table-wrap {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+
+.table-wrap.compact {
+  margin-top: 16px;
+}
+
+table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.compact table {
+  min-width: 520px;
+}
+
+th,
+td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+td {
+  font-weight: 650;
+}
+
+.empty-row {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    width: min(100% - 24px, 680px);
+    padding: 18px 0;
+  }
+
+  .app-header,
+  .section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  #employee-view,
+  .admin-view.is-active {
+    grid-template-columns: 1fr;
+  }
+
+  .attendance-panel {
+    min-height: 500px;
+  }
+
+  .view-switch,
+  .tabs,
+  .report-actions {
+    width: 100%;
+  }
+
+  .view-tab,
+  .tab {
+    flex: 1;
+    padding: 0 8px;
+  }
+
+  .config-form,
+  .result-list {
+    grid-template-columns: 1fr;
+  }
+
+  .secondary-button {
+    width: 100%;
+  }
+}

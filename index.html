@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Employee Attendance</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./firebase-config.js"></script>
+  </head>
+  <body>
+    <main class="app-shell employee-shell">
+      <header class="app-header">
+        <div>
+          <h1>Employee Attendance</h1>
+          <p id="current-day">Saturday</p>
+        </div>
+      </header>
+
+      <section class="employee-layout">
+        <section class="attendance-panel" aria-labelledby="employee-title">
+          <h2 id="employee-title">Check In</h2>
+
+          <form class="employee-form" id="employee-form">
+            <label for="employee-select">Employee</label>
+            <select id="employee-select" name="employee" autocomplete="off"></select>
+          </form>
+
+          <div class="welcome-block">
+            <span>Welcome,</span>
+            <strong id="employee-name">Veeru</strong>
+            <time id="current-date" datetime="2026-08-08">08 Aug 2026</time>
+          </div>
+
+          <button class="check-in-button" id="check-in-button" type="button">CHECK IN</button>
+
+          <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="result-panel" id="result-panel" aria-live="polite" hidden>
+          <div class="success-mark" id="result-mark">✓</div>
+          <h2 id="result-title">Check-In Successful</h2>
+          <dl class="result-list">
+            <div>
+              <dt>Employee</dt>
+              <dd id="result-employee">-</dd>
+            </div>
+            <div>
+              <dt>Check-in time</dt>
+              <dd id="result-time">-</dd>
+            </div>
+            <div>
+              <dt>Location</dt>
+              <dd id="result-location">-</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd id="result-status">-</dd>
+            </div>
+          </dl>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./employee.js?v=20260808-employee-only"></script>
+  </body>
+</html>
