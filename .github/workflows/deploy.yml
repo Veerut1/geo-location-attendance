@@ -9,26 +9,25 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pages: write
-      id-token: write
+      contents: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Generate runtime config
-        run: npm run generate-config
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-      - name: Prepare static site
-        run: |
-          mkdir -p public
-          cp index.html admin.html styles.css firebase-config.js attendance-data.js employee.js admin.js public/
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build app
+        run: npm run build
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          publish_dir: ./public
-          commit_message: 'Deploy Geo Location Attendance to GitHub Pages'
-          keep_files: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build
