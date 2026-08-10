@@ -13,6 +13,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Generate runtime config
+        run: npm run generate-config
+
       - name: Prepare static site
         run: |
           mkdir -p public
