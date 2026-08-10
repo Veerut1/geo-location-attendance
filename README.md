@@ -18,6 +18,23 @@ Open `http://localhost:5173`.
 4. Set `window.ATTENDANCE_USE_FIRESTORE = true` only after Firestore access is ready.
 
 When `firebase-config.js` is not configured, the app falls back to local browser storage for demos.
+
+### Environment-based config generation
+
+If you use `.env`, `npm run dev` now generates `firebase-config.js` automatically before starting the app.
+
+Create a `.env` file in the project root, then run:
+
+```bash
+npm run dev
+```
+
+or generate config explicitly with:
+
+```bash
+npm run generate-config
+```
+
 ## GitHub Pages Deployment
 
 This repository includes a GitHub Actions workflow at `.github/workflows/deploy.yml` that deploys the static app to GitHub Pages whenever code is merged to the `main` branch.

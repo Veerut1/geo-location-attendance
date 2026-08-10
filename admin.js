@@ -17,7 +17,6 @@ import {
 
 const LATE_CHECK_IN_HOUR = 10;
 const ADMIN_SESSION_KEY = "attendance-admin-session";
-const DEFAULT_ADMIN_PASSCODE = "admin123";
 
 const els = {
   loginPanel: document.querySelector("#admin-login-panel"),
@@ -73,7 +72,7 @@ function init() {
 
 function handleLogin(event) {
   event.preventDefault();
-  const configuredPasscode = window.ATTENDANCE_ADMIN_PASSCODE || DEFAULT_ADMIN_PASSCODE;
+  const configuredPasscode = window.ATTENDANCE_ADMIN_PASSCODE;
 
   if (els.passwordInput.value !== configuredPasscode) {
     setLoginStatus("Invalid passcode.", true);

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run generate-config",
     "dev": "python3 -m http.server 5173",
     "test": "node --test",
     "generate-config": "node scripts/generate-firebase-config.js"
