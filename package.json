@@ -7,7 +7,8 @@
     "predev": "npm run generate-config",
     "dev": "python3 -m http.server 5173",
     "test": "node --test",
-    "generate-config": "node scripts/generate-firebase-config.js"
+    "generate-config": "node scripts/generate-firebase-config.js",
+    "build": "npm run generate-config && rm -rf build && mkdir -p build && cp index.html admin.html styles.css firebase-config.js attendance-data.js employee.js admin.js build/"
   },
   "dependencies": {
     "firebase-tools": "^15.26.0"
