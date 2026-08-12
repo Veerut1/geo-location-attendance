@@ -1,65 +1,233 @@
-export const DEFAULT_EMPLOYEES = [
-  { id: "EMP001", name: "Veeru" },
-  { id: "EMP002", name: "Raj" },
-  { id: "EMP003", name: "Akash" }
-];
+import { collection, doc, getDoc, getDocs, orderBy, query, setDoc } from "firebase/firestore";
+import { firestoreDb, getFirebaseConfigError, hasFirebaseConfig } from "./src/firebase.js";
 
-export const DEFAULT_OFFICES = [
-  {
-    id: "BLR001",
-    name: "Bangalore Office",
-    latitude: 12.9716,
-    longitude: 77.5946,
-    radiusMeters: 200
+function assertFirebaseAvailable() {
+  if (!hasFirebaseConfig || !firestoreDb) {
+    throw new Error(getFirebaseConfigError() || "Firestore is not configured. Set the VITE_FIREBASE_* values in your .env file for your Firebase project.");
   }
-];
+}
+
+const CONFIG_STORAGE_KEY = "attendance-config";
+
+function emptyConfig() {
+  return { employees: [], offices: [] };
+}
+
+function getStorage() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return null;
+  }
+
+  return window.localStorage;
+}
+
+export function readConfigFromStorage(storage = getStorage()) {
+  if (!storage) {
+    return emptyConfig();
+  }
+
+  try {
+    const raw = storage.getItem(CONFIG_STORAGE_KEY);
+    if (!raw) {
+      return emptyConfig();
+    }
+
+    const parsed = JSON.parse(raw);
+    return {
+      employees: Array.isArray(parsed?.employees) ? normalizeEmployees(parsed.employees) : [],
+      offices: Array.isArray(parsed?.offices) ? parsed.offices.map(normalizeOffice) : []
+    };
+  } catch {
+    return emptyConfig();
+  }
+}
+
+export function writeConfigToStorage(config, storage = getStorage()) {
+  if (!storage) {
+    return false;
+  }
+
+  try {
+    storage.setItem(CONFIG_STORAGE_KEY, JSON.stringify({
+      employees: normalizeEmployees(config.employees),
+      offices: normalizeOffices(config.offices)
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const OFFICE_RADIUS_METERS = 200;
 export const MAX_GPS_ACCURACY_METERS = 100;
-export const STORAGE_KEY = "attendance-records";
-export const EMPLOYEE_STORAGE_KEY = "attendance-employees";
-export const OFFICE_STORAGE_KEY = "attendance-offices";
 
-export function readEmployees() {
-  return readConfig(EMPLOYEE_STORAGE_KEY, DEFAULT_EMPLOYEES);
+const API_BASE =
+  typeof import.meta !== "undefined" && import.meta.env
+    ? import.meta.env.VITE_ATTENDANCE_API_BASE || ""
+    : "";
+const ADMIN_LOGIN_ENDPOINT = `${API_BASE}/.netlify/functions/adminLogin`;
+const ADMIN_LOGOUT_ENDPOINT = `${API_BASE}/.netlify/functions/adminLogout`;
+
+export function createStore() {
+  return createFirebaseStore();
 }
 
-export function saveEmployees(employees) {
-  saveConfig(EMPLOYEE_STORAGE_KEY, employees);
+export async function initializeStore() {
+  return createFirebaseStore();
 }
 
-export function readOffices() {
-  return readConfig(OFFICE_STORAGE_KEY, DEFAULT_OFFICES).map(normalizeOffice);
-}
-
-export function saveOffices(offices) {
-  saveConfig(OFFICE_STORAGE_KEY, offices.map(normalizeOffice));
-}
-
-export function createLocalStore() {
+function createFirebaseStore() {
   return {
     async getAttendance(employeeId, date) {
-      return readLocalRecords().find(
-        (record) => record.employeeId === employeeId && record.date === date
-      ) ?? null;
-    },
-    async createAttendance(attendance) {
-      const records = readLocalRecords();
-      const exists = records.some(
-        (record) =>
-          record.employeeId === attendance.employeeId && record.date === attendance.date
-      );
-      if (exists) {
-        throw new Error("You have already checked in today.");
+      try {
+        const normalizedEmployeeId = normalizeId(employeeId);
+        const snapshot = await getDoc(doc(firestoreDb, "attendance", `${normalizedEmployeeId}_${date}`));
+        return snapshot.exists() ? snapshot.data() : null;
+      } catch (error) {
+        throw new Error(parseFirebaseError(error, "Unable to load attendance."));
       }
-      records.push(attendance);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-      return attendance;
     },
+
+    async createAttendance(attendance) {
+      try {
+        const employeeId = normalizeId(attendance.employeeId);
+        const { employees, offices } = await readConfig();
+        const employee = employees.find((item) => item.id === employeeId);
+
+        if (!employee) {
+          throw new Error("Employee is not configured.");
+        }
+
+        const officeMatch = findNearestOffice(offices, attendance.latitude, attendance.longitude);
+        const attendanceId = `${employeeId}_${attendance.date}`;
+        const now = new Date();
+        const attendanceData = {
+          employeeId,
+          employeeName: employee.name,
+          date: attendance.date,
+          checkInTime: now.toISOString(),
+          latitude: attendance.latitude,
+          longitude: attendance.longitude,
+          accuracyMeters: Math.round(Number(attendance.accuracyMeters)),
+          status: officeMatch.isOffice ? "OFFICE" : "REMOTE",
+          officeId: officeMatch.office.id,
+          officeName: officeMatch.office.name,
+          distanceFromOfficeMeters: Math.round(officeMatch.distanceMeters),
+          deviceType: String(attendance.deviceType || "unknown").slice(0, 40),
+          browser: String(attendance.browser || "unknown").slice(0, 40),
+          createdAt: now.toISOString()
+        };
+
+        const docRef = doc(firestoreDb, "attendance", attendanceId);
+        const existing = await getDoc(docRef);
+        if (existing.exists()) {
+          throw new Error("You have already checked in today.");
+        }
+
+        await setDoc(docRef, attendanceData);
+        return attendanceData;
+      } catch (error) {
+        if (error?.message === "Employee is not configured." || error?.message === "You have already checked in today.") {
+          throw error;
+        }
+        throw new Error(parseFirebaseError(error, "Unable to save attendance."));
+      }
+    },
+
     async listAttendance() {
-      return readLocalRecords();
+      try {
+        const attendanceQuery = query(collection(firestoreDb, "attendance"), orderBy("checkInTime", "desc"));
+        const snapshot = await getDocs(attendanceQuery);
+        return snapshot.docs.map((attendanceDoc) => attendanceDoc.data());
+      } catch (error) {
+        throw new Error(parseFirebaseError(error, "Unable to load attendance records."));
+      }
     }
   };
+}
+
+export async function readConfig() {
+  try {
+    assertFirebaseAvailable();
+    const [employeesDoc, officesDoc] = await Promise.all([
+      getDoc(doc(firestoreDb, "config", "employees")),
+      getDoc(doc(firestoreDb, "config", "offices"))
+    ]);
+
+    return {
+      employees: Array.isArray(employeesDoc.data()?.items) ? normalizeEmployees(employeesDoc.data().items) : [],
+      offices: Array.isArray(officesDoc.data()?.items) ? officesDoc.data().items.map(normalizeOffice) : []
+    };
+  } catch (error) {
+    throw new Error(parseFirebaseError(error, "Unable to load attendance configuration."));
+  }
+}
+
+export async function saveConfig(config) {
+  const employees = normalizeEmployees(config.employees);
+  const offices = normalizeOffices(config.offices);
+
+  if (!employees.length) {
+    throw new Error("At least one employee is required.");
+  }
+
+  if (!offices.length) {
+    throw new Error("At least one office is required.");
+  }
+
+  try {
+    assertFirebaseAvailable();
+    const updatedAt = new Date().toISOString();
+    await Promise.all([
+      setDoc(doc(firestoreDb, "config", "employees"), { items: employees, updatedAt }),
+      setDoc(doc(firestoreDb, "config", "offices"), { items: offices, updatedAt })
+    ]);
+  } catch (error) {
+    throw new Error(parseFirebaseError(error, "Unable to save attendance configuration."));
+  }
+
+  return {
+    employees,
+    offices
+  };
+}
+
+export async function loginAdmin(passcode) {
+  const response = await fetch(ADMIN_LOGIN_ENDPOINT, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ passcode })
+  });
+  if (!response.ok) {
+    throw new Error(await parseApiError(response));
+  }
+  return response.json();
+}
+
+export async function logoutAdmin() {
+  await fetch(ADMIN_LOGOUT_ENDPOINT, {
+    method: "POST",
+    credentials: "include"
+  });
+}
+
+async function parseApiError(response) {
+  const text = await response.text();
+  try {
+    const body = JSON.parse(text);
+    return body.error || body.message || response.statusText || text || "Server error";
+  } catch {
+    return response.statusText || text || "Server error";
+  }
+}
+
+function parseFirebaseError(error, fallback) {
+  if (error?.code === "permission-denied") {
+    return "Firebase permission denied. Check Firestore security rules.";
+  }
+
+  return error?.message || fallback;
 }
 
 export function findNearestOffice(offices, latitude, longitude) {
@@ -137,6 +305,25 @@ export function normalizeOffice(office) {
   };
 }
 
+export function normalizeEmployees(employees = []) {
+  return employees
+    .map((employee) => ({
+      id: normalizeId(employee.id),
+      name: String(employee.name ?? "").trim()
+    }))
+    .filter((employee) => employee.id && employee.name);
+}
+
+export function normalizeOffices(offices = []) {
+  return offices.map(normalizeOffice).filter(
+    (office) =>
+      office.id &&
+      office.name &&
+      isValidLatitude(office.latitude) &&
+      isValidLongitude(office.longitude)
+  );
+}
+
 export function normalizeId(value) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
 }
@@ -155,34 +342,4 @@ export function formatCsvCell(value) {
     return `"${text.replaceAll('"', '""')}"`;
   }
   return text;
-}
-
-export function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function readLocalRecords() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
-}
-
-function readConfig(key, fallback) {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) ?? "null");
-    return Array.isArray(value) && value.length ? value : structuredClone(fallback);
-  } catch {
-    return structuredClone(fallback);
-  }
-}
-
-function saveConfig(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
 }

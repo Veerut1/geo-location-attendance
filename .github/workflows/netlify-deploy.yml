@@ -1,0 +1,42 @@
+name: Manual Netlify Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      production:
+        description: Deploy to production
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          PRODUCTION: ${{ inputs.production }}
+        run: |
+          if [ "$PRODUCTION" = "true" ]; then
+            npx netlify deploy --prod --dir=build --functions=netlify/functions
+          else
+            npx netlify deploy --dir=build --functions=netlify/functions
+          fi

@@ -1,78 +1,82 @@
 # Geo Location Attendance
 
-A daily employee check-in app. Employees check in once per working day.
+A simple React attendance app for Netlify. The browser app records employee location and manages attendance data with the Firebase Web SDK.
 
-## Run
+## Firebase Access Model
 
-```bash
-npm run dev
-```
+The React app initializes Firebase with the modular Web SDK and talks to Firestore directly:
 
-Open `http://localhost:5173`.
+- `config/employees` and `config/offices` are readable and writable by the browser.
+- `attendance/{employeeId}_{date}` can be read by document id and created once by the browser.
+- Attendance reports list the `attendance` collection directly from the browser.
 
-## Firebase Setup
+The app does not ship with default employees or office locations. Add them from the admin screen or seed the Firestore `config` documents yourself.
 
-1. Fill in `firebase-config.js` using `firebase-config.example.js` as a guide.
-2. Keep `window.ATTENDANCE_USE_FIRESTORE = false` for local demos.
-3. Deploy `firestore.rules` to enforce one check-in per employee per date.
-4. Set `window.ATTENDANCE_USE_FIRESTORE = true` only after Firestore access is ready.
+Netlify Functions are only used for the lightweight admin passcode session:
 
-When `firebase-config.js` is not configured, the app falls back to local browser storage for demos.
+- `adminLogin` and `adminLogout` manage the admin session cookie.
 
-### Environment-based config generation
+Firebase Web SDK config values are public browser configuration. This app does not use Firebase Admin credentials.
 
-If you use `.env`, `npm run dev` now generates `firebase-config.js` automatically before starting the app.
+Important: because the data path is Web SDK-only and this app does not use Firebase Auth, Firestore security rules cannot verify the admin passcode cookie. Deploy rules that match your intended trust model before using this with real attendance data.
 
-Create a `.env` file in the project root, then run:
+## Local Setup
 
 ```bash
-npm run dev
+npm install
+npm run generate:env
+npm run netlify:dev
 ```
 
-or generate config explicitly with:
+Open the local Netlify URL shown in the terminal, usually `http://localhost:8888`.
+
+## Environment Variables
+
+Set these in `.env` for local Netlify Dev and in Netlify site settings for production:
 
 ```bash
-npm run generate-config
+ATTENDANCE_ADMIN_PASSCODE=change-this-passcode
+ADMIN_SESSION_SECRET=change-this-long-random-secret
+VITE_FIREBASE_API_KEY=your-web-api-key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+VITE_FIREBASE_APP_ID=your-app-id
 ```
 
-## GitHub Pages Deployment
+`VITE_ATTENDANCE_API_BASE` can stay empty when React and Netlify Functions are deployed on the same Netlify site.
 
-This repository includes a GitHub Actions workflow at `.github/workflows/deploy.yml` that deploys the static app to GitHub Pages whenever code is merged to the `main` branch.
+## Routes
 
-The workflow copies the app's static files into a temporary `public` folder and publishes them using `peaceiris/actions-gh-pages@v4`.
+- `/` - employee check-in
+- `/admin` - admin dashboard and CSV reports
 
-After merge, GitHub Pages will serve the site from the generated `gh-pages` branch.
-## Admin Setup
+## Build
 
-Use the Admin view to maintain employee details, configure one or more office locations, and download attendance reports as CSV files.
-
-Each office is matched with a fixed 200 meter radius. A check-in inside that radius is marked `OFFICE`; a check-in outside all configured office areas is marked `REMOTE`.
-
-## Data Model
-
-Attendance documents use:
-
-```text
-attendance/{employeeId}_{YYYY-MM-DD}
+```bash
+npm run build
 ```
 
-Allowed fields are limited to check-in data only:
+The production build is written to `build/`. Netlify reads `netlify.toml` and publishes that folder with functions from `netlify/functions`.
 
-```json
-{
-  "employeeId": "EMP001",
-  "employeeName": "Veeru",
-  "date": "2026-08-08",
-  "checkInTime": "serverTimestamp",
-  "latitude": 12.9716,
-  "longitude": 77.5946,
-  "accuracyMeters": 15,
-  "status": "OFFICE",
-  "officeId": "BLR001",
-  "officeName": "Bangalore Office",
-  "distanceFromOfficeMeters": 23,
-  "deviceType": "mobile",
-  "browser": "Safari",
-  "createdAt": "serverTimestamp"
-}
+## Manual Netlify Deployment Workflow
+
+This repo includes `.github/workflows/netlify-deploy.yml` with `workflow_dispatch`, so deployment can be triggered manually from GitHub Actions.
+
+Add these GitHub repository secrets:
+
+```bash
+NETLIFY_AUTH_TOKEN
+NETLIFY_SITE_ID
 ```
+
+Then go to GitHub Actions, choose **Manual Netlify Deploy**, and run the workflow. Use the `production` input to choose draft or production deploy.
+
+## Firestore Collections
+
+- `attendance/{employeeId}_{date}` stores one check-in per employee per date.
+- `config/employees` stores `{ items: [...] }`.
+- `config/offices` stores `{ items: [...] }`.
+
+Office check-ins within 200 meters of a configured office are marked `OFFICE`; otherwise they are marked `REMOTE`.

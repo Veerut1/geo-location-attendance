@@ -1,0 +1,8 @@
+{
+  "version": 3,
+  "sources": ["../../../../../../Users/veeru/VSCodeProjects/geo-location-attendance/netlify/functions/health.js", "../../../../../../Users/veeru/VSCodeProjects/geo-location-attendance/netlify/functions/lib/http.js"],
+  "sourceRoot": "/var/folders/x6/hh2t60_d13xdk_lgz9g6cd640000gn/T/tmp-48255-6gnWQ5IyQoNN",
+  "sourcesContent": ["import { json } from \"./lib/http.js\";\n\nexport const handler = async () => json(200, { status: \"ok\" });\n", "export function json(statusCode, body, headers = {}) {\n  return {\n    statusCode,\n    headers: {\n      \"Content-Type\": \"application/json\",\n      ...headers\n    },\n    body: JSON.stringify(body)\n  };\n}\n\nexport function methodNotAllowed() {\n  return json(405, { error: \"Method not allowed.\" });\n}\n\nexport function unauthorized() {\n  return json(401, { error: \"Admin login required.\" });\n}\n\nexport function badRequest(message) {\n  return json(400, { error: message });\n}\n\nexport function serverError(error) {\n  console.error(error);\n  return json(500, { error: \"Internal server error.\" });\n}\n\nexport function readJson(event) {\n  try {\n    return JSON.parse(event.body || \"{}\");\n  } catch {\n    throw new Error(\"Request body must be valid JSON.\");\n  }\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;;;ACAO,cAAc,YAAY,MAAM,UAAU,CAAC,GAAG;AACnD,SAAO;AAAA,IACL;AAAA,IACA,SAAS;AAAA,MACP,gBAAgB;AAAA,OACb;AAAA,IAEL,MAAM,KAAK,UAAU,IAAI;AAAA,EAC3B;AACF;;;ADPO,IAAM,UAAU,YAAY,KAAK,KAAK,EAAE,QAAQ,KAAK,CAAC;",
+  "names": []
+}

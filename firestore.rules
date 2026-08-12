@@ -2,95 +2,67 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function validAttendanceId(attendanceId) {
-      return attendanceId == request.resource.data.employeeId + "_" + request.resource.data.date;
-    }
-
-    function hasOnlyCheckInFields() {
-      return request.resource.data.keys().hasOnly([
-        "employeeId",
-        "employeeName",
-        "date",
-        "checkInTime",
-        "latitude",
-        "longitude",
-        "accuracyMeters",
-        "status",
-        "officeId",
-        "officeName",
-        "distanceFromOfficeMeters",
-        "deviceType",
-        "browser",
-        "createdAt"
-      ]);
-    }
-
-    function hasRequiredCheckInFields() {
-      return request.resource.data.keys().hasAll([
-        "employeeId",
-        "employeeName",
-        "date",
-        "checkInTime",
-        "latitude",
-        "longitude",
-        "accuracyMeters",
-        "status",
-        "officeId",
-        "officeName",
-        "distanceFromOfficeMeters",
-        "deviceType",
-        "browser",
-        "createdAt"
-      ]);
-    }
-
-    function isValidDate() {
-      return request.resource.data.date.matches("^\\d{4}-\\d{2}-\\d{2}$");
-    }
-
-    function isValidLocation() {
-      return request.resource.data.latitude is number
-        && request.resource.data.longitude is number
-        && request.resource.data.accuracyMeters is number
-        && request.resource.data.distanceFromOfficeMeters is number
-        && request.resource.data.latitude >= -90
-        && request.resource.data.latitude <= 90
-        && request.resource.data.longitude >= -180
-        && request.resource.data.longitude <= 180
-        && request.resource.data.accuracyMeters > 0
-        && request.resource.data.accuracyMeters <= 100;
-    }
-
-    function hasValidTextFields() {
-      return request.resource.data.employeeId is string
-        && request.resource.data.employeeName is string
-        && request.resource.data.officeId is string
-        && request.resource.data.officeName is string
-        && request.resource.data.deviceType is string
-        && request.resource.data.browser is string;
-    }
-
-    function isValidStatus() {
-      return request.resource.data.status in ["OFFICE", "REMOTE"];
-    }
-
-    function isValidCheckInCreate(attendanceId) {
-      return hasOnlyCheckInFields()
-        && hasRequiredCheckInFields()
-        && validAttendanceId(attendanceId)
-        && isValidDate()
-        && isValidLocation()
-        && isValidStatus()
-        && hasValidTextFields()
-        && request.resource.data.checkInTime == request.time
-        && request.resource.data.createdAt == request.time;
+    match /config/{document} {
+      allow get: if document in ['employees', 'offices'];
+      allow create, update: if document in ['employees', 'offices'] && isValidConfig(document, request.resource.data);
+      allow list, delete: if false;
     }
 
     match /attendance/{attendanceId} {
-      allow read: if true;
-      allow create: if !exists(/databases/$(database)/documents/attendance/$(attendanceId))
-        && isValidCheckInCreate(attendanceId);
+      allow get: if true;
+      allow create: if isValidAttendance(attendanceId, request.resource.data);
+      allow list: if true;
       allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidAttendance(attendanceId, data) {
+      return attendanceId == data.employeeId + '_' + data.date
+        && data.keys().hasOnly([
+          'employeeId',
+          'employeeName',
+          'date',
+          'checkInTime',
+          'latitude',
+          'longitude',
+          'accuracyMeters',
+          'status',
+          'officeId',
+          'officeName',
+          'distanceFromOfficeMeters',
+          'deviceType',
+          'browser',
+          'createdAt'
+        ])
+        && data.employeeId is string
+        && data.employeeName is string
+        && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && data.checkInTime is string
+        && data.latitude is number
+        && data.latitude >= -90
+        && data.latitude <= 90
+        && data.longitude is number
+        && data.longitude >= -180
+        && data.longitude <= 180
+        && data.accuracyMeters is int
+        && data.accuracyMeters >= 0
+        && data.status in ['OFFICE', 'REMOTE']
+        && data.officeId is string
+        && data.officeName is string
+        && data.distanceFromOfficeMeters is int
+        && data.deviceType is string
+        && data.browser is string
+        && data.createdAt is string;
+    }
+
+    function isValidConfig(document, data) {
+      return data.keys().hasOnly(['items', 'updatedAt'])
+        && data.items is list
+        && data.updatedAt is string
+        && (document == 'employees' || document == 'offices');
     }
   }
 }
