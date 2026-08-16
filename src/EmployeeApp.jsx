@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAX_GPS_ACCURACY_METERS,
   initializeStore,
@@ -28,11 +28,16 @@ export default function EmployeeApp() {
   const [statusError, setStatusError] = useState(false);
   const [attendance, setAttendance] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const selectedEmployeeIdRef = useRef(selectedEmployeeId);
 
   const employee = useMemo(
     () => employees.find((item) => item.id === selectedEmployeeId) ?? employees[0],
     [employees, selectedEmployeeId]
   );
+
+  useEffect(() => {
+    selectedEmployeeIdRef.current = selectedEmployeeId;
+  }, [selectedEmployeeId]);
 
   useEffect(() => {
     Promise.all([initializeStore(), readConfig()])
@@ -48,21 +53,37 @@ export default function EmployeeApp() {
   }, []);
 
   useEffect(() => {
-    if (!store || !employee) return;
+    if (!store || !employee) {
+      setAttendance(null);
+      return;
+    }
+
+    let isCurrent = true;
     const date = formatDateKey(new Date());
+    setAttendance(null);
+    setStatus("");
+    setStatusError(false);
+
     store
       .getAttendance(employee.id, date)
       .then((record) => {
+        if (!isCurrent) return;
+        setAttendance(record);
         if (record) {
-          setAttendance(record);
           setStatus("You have already checked in today.");
           setStatusError(false);
         }
       })
       .catch((error) => {
+        if (!isCurrent) return;
+        setAttendance(null);
         setStatus(error.message);
         setStatusError(true);
       });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [store, employee]);
 
   const handleSubmit = async () => {
@@ -72,16 +93,21 @@ export default function EmployeeApp() {
       return;
     }
 
+    const employeeAtSubmit = employee;
+    const isCurrentEmployee = () => selectedEmployeeIdRef.current === employeeAtSubmit.id;
+
     setStatus("Checking today's attendance...");
     setStatusError(false);
     setIsLoading(true);
 
     try {
       const date = formatDateKey(new Date());
-      const existing = await store.getAttendance(employee.id, date);
+      const existing = await store.getAttendance(employeeAtSubmit.id, date);
       if (existing) {
-        setAttendance(existing);
-        setStatus("You have already checked in today.");
+        if (isCurrentEmployee()) {
+          setAttendance(existing);
+          setStatus("You have already checked in today.");
+        }
         setIsLoading(false);
         return;
       }
@@ -96,7 +122,7 @@ export default function EmployeeApp() {
 
       const now = new Date();
       const attendancePayload = {
-        employeeId: employee.id,
+        employeeId: employeeAtSubmit.id,
         date,
         latitude,
         longitude,
@@ -106,11 +132,15 @@ export default function EmployeeApp() {
       };
 
       const savedAttendance = await store.createAttendance(attendancePayload);
-      setAttendance(savedAttendance);
-      setStatus("Attendance saved.");
+      if (isCurrentEmployee()) {
+        setAttendance(savedAttendance);
+        setStatus("Attendance saved.");
+      }
     } catch (error) {
-      setStatus(error?.message || "Internal DB Error");
-      setStatusError(true);
+      if (isCurrentEmployee()) {
+        setStatus(error?.message || "Internal DB Error");
+        setStatusError(true);
+      }
     } finally {
       setIsLoading(false);
     }
