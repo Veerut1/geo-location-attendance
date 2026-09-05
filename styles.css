@@ -340,6 +340,50 @@ button:focus-visible {
   flex-wrap: wrap;
 }
 
+.period-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.period-controls input {
+  min-height: 40px;
+  width: 145px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.period-button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.period-button:hover {
+  background: #eaf0f7;
+}
+
+.period-button:disabled {
+  cursor: not-allowed;
+}
+
+.period-label {
+  min-width: 188px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .tabs {
   display: inline-flex;
   min-height: 40px;
@@ -458,8 +502,19 @@ td {
 
   .report-actions,
   .tabs,
+  .period-controls,
   .secondary-button {
     width: 100%;
+  }
+
+  .period-controls {
+    flex-wrap: wrap;
+  }
+
+  .period-controls input,
+  .period-label {
+    flex: 1;
+    min-width: 0;
   }
 
   .tab {
