@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import {
-  initializeStore,
-  formatCsvCell,
   formatDateKey,
-  formatTime,
+  initializeStore,
   isValidLatitude,
   isValidLongitude,
   loginAdmin,
@@ -13,15 +11,28 @@ import {
   readConfig,
   saveConfig
 } from "../attendance-data.js";
+import {
+  DAILY_REPORT_HEADERS,
+  WEEKLY_REPORT_HEADERS,
+  createDailyReportRows,
+  createMonthlyReportHeaders,
+  createMonthlyReportRows,
+  createWeeklyReportRows,
+  downloadDailyReport,
+  downloadMonthlyReport,
+  downloadWeeklyReport,
+  formatMonthKey,
+  weekForDate
+} from "./reportDownloads.js";
 
 const ADMIN_SESSION_KEY = "attendance-admin-session";
-const LATE_CHECK_IN_HOUR = 10;
 
 export default function AdminApp() {
   const [store, setStore] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [offices, setOffices] = useState([]);
   const [activeReport, setActiveReport] = useState("daily");
+  const [reportDate, setReportDate] = useState(() => new Date());
   const [loginActive, setLoginActive] = useState(sessionStorage.getItem(ADMIN_SESSION_KEY) === "active");
   const [loginStatus, setLoginStatus] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -48,7 +59,7 @@ export default function AdminApp() {
   useEffect(() => {
     if (!loginActive) return;
     generateReport();
-  }, [loginActive, activeReport, employees, offices, store]);
+  }, [loginActive, activeReport, reportDate, employees, offices, store]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -137,65 +148,38 @@ export default function AdminApp() {
       return;
     }
     if (activeReport === "daily") {
-      const today = formatDateKey(new Date());
-      const todayRecords = records.filter((record) => record.date === today);
-      setReportHeaders(["Employee", "Date", "Check-In Time", "Status", "Office", "Distance From Office"]);
-      setReportRows(
-        todayRecords.map((record) => [
-          record.employeeName,
-          record.date,
-          formatTime(record.checkInTime),
-          record.status,
-          record.officeName,
-          `${record.distanceFromOfficeMeters} m`
-        ])
-      );
+      setReportHeaders(DAILY_REPORT_HEADERS);
+      setReportRows(createDailyReportRows(records, reportDate));
       return;
     }
 
     if (activeReport === "weekly") {
-      const weekDates = datesInCurrentWeek();
-      setReportHeaders(["Employee", "Office Days", "Remote Days", "Not Checked In"]);
-      setReportRows(employees.map((employee) => summarizeEmployee(employee, records, weekDates)));
+      setReportHeaders(WEEKLY_REPORT_HEADERS);
+      setReportRows(createWeeklyReportRows(employees, records, reportDate));
       return;
     }
 
-    const monthDates = workingDatesInCurrentMonth();
-    setReportHeaders([
-      "Employee",
-      "Working Days",
-      "Office Days",
-      "Remote Days",
-      "Not Checked In",
-      "Late Check-Ins",
-      "Average Check-In Time"
-    ]);
-    setReportRows(employees.map((employee) => summarizeEmployeeMonth(employee, records, monthDates)));
+    setReportHeaders(createMonthlyReportHeaders(reportDate));
+    setReportRows(createMonthlyReportRows(employees, records, reportDate));
   };
 
   const downloadReport = async () => {
-    if (activeReport !== "daily") {
-      if (!store) return;
-      try {
-        const records = await store.listAttendance();
-        downloadWeekWiseWorkbook(employees, records);
-      } catch (error) {
-        setLoginStatus(error.message || "Unable to download attendance records.");
+    if (!store) return;
+
+    try {
+      const records = await store.listAttendance();
+      if (activeReport === "daily") {
+        downloadDailyReport(records, reportDate);
+      } else if (activeReport === "weekly") {
+        downloadWeeklyReport(employees, records, reportDate);
+      } else {
+        downloadMonthlyReport(employees, records, reportDate);
       }
+      setLoginStatus("");
+    } catch (error) {
+      setLoginStatus(error.message || "Unable to download attendance records.");
       return;
     }
-
-    const rows = [reportHeaders, ...reportRows];
-    const csv = rows.map((row) => row.map(formatCsvCell).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${activeReport}-attendance-${formatDateKey(new Date())}.csv`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
   };
 
   if (!loginActive) {
@@ -349,6 +333,31 @@ export default function AdminApp() {
                     </button>
                   ))}
                 </div>
+                <div className="period-controls" aria-label="Report period">
+                  <button
+                    className="period-button"
+                    type="button"
+                    onClick={() => setReportDate((current) => shiftReportDate(activeReport, current, -1))}
+                  >
+                    Prev
+                  </button>
+                  <input
+                    aria-label={`${activeReport} report period`}
+                    type={reportInputType(activeReport)}
+                    value={reportInputValue(activeReport, reportDate)}
+                    max={reportInputValue(activeReport, new Date())}
+                    onChange={(event) => setReportDate(parseReportInputValue(activeReport, event.target.value, reportDate))}
+                  />
+                  <span className="period-label">{reportPeriodLabel(activeReport, reportDate)}</span>
+                  <button
+                    className="period-button"
+                    type="button"
+                    onClick={() => setReportDate((current) => shiftReportDate(activeReport, current, 1))}
+                    disabled={isCurrentReportPeriod(activeReport, reportDate)}
+                  >
+                    Next
+                  </button>
+                </div>
                 <button className="secondary-button" type="button" onClick={downloadReport}>
                   {activeReport === "daily" ? "Download CSV" : "Download XLS"}
                 </button>
@@ -383,133 +392,83 @@ export default function AdminApp() {
   );
 }
 
-function downloadWeekWiseWorkbook(employees, records) {
-  const weeks = weeksInCurrentMonthToDate();
-  const workbook = buildWeekWiseWorkbook(employees, records, weeks);
-  const blob = new Blob([workbook], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `week-wise-attendance-${formatDateKey(new Date())}.xls`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-function buildWeekWiseWorkbook(employees, records, weeks) {
-  const worksheets = weeks.map((week, index) => {
-    const headers = [
-      "Employee ID",
-      "Employee",
-      ...week.dates.map((date) => formatWeekdayHeader(date)),
-      "WFO",
-      "WFH",
-      "L"
-    ];
-    const rows = employees.map((employee) => buildWeekWiseEmployeeRow(employee, records, week.dates));
-
-    return `
-      <Worksheet ss:Name="${escapeXml(`Week ${index + 1}`)}">
-        <Table>
-          ${spreadsheetRow([week.label], "Header")}
-          ${spreadsheetRow(headers, "Header")}
-          ${rows.map((row) => spreadsheetRow(row)).join("")}
-        </Table>
-      </Worksheet>`;
-  });
-
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook
-  xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:x="urn:schemas-microsoft-com:office:excel"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:html="http://www.w3.org/TR/REC-html40">
-  <Styles>
-    <Style ss:ID="Header">
-      <Font ss:Bold="1"/>
-    </Style>
-  </Styles>
-  ${worksheets.join("")}
-</Workbook>`;
-}
-
-function buildWeekWiseEmployeeRow(employee, records, dates) {
-  const statuses = dates.map((date) => attendanceCodeForDate(employee, records, date));
-  const wfoDays = statuses.filter((status) => status === "WFO").length;
-  const wfhDays = statuses.filter((status) => status === "WFH").length;
-  const leaveDays = statuses.filter((status) => status === "L").length;
-
-  return [employee.id, employee.name, ...statuses, wfoDays, wfhDays, leaveDays];
-}
-
-function attendanceCodeForDate(employee, records, date) {
-  const dateKey = formatDateKey(date);
-  const record = records.find((item) => item.employeeId === employee.id && item.date === dateKey);
-
-  if (!record) {
-    return "L";
+function shiftReportDate(activeReport, date, amount) {
+  if (activeReport === "daily") {
+    const next = new Date(date);
+    next.setDate(date.getDate() + amount);
+    return next;
   }
 
-  if (record.status === "OFFICE") {
-    return "WFO";
+  if (activeReport === "weekly") {
+    const next = new Date(date);
+    next.setDate(date.getDate() + amount * 7);
+    return next;
   }
 
-  if (record.status === "REMOTE") {
-    return "WFH";
-  }
-
-  return "L";
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
-function weeksInCurrentMonthToDate() {
-  const today = startOfDay(new Date());
-  const weeks = [];
+function reportInputType(activeReport) {
+  if (activeReport === "weekly") {
+    return "week";
+  }
 
-  for (let day = 1; day <= today.getDate(); day += 1) {
-    const date = new Date(today.getFullYear(), today.getMonth(), day);
-    if (date.getDay() === 0 || date.getDay() === 6) {
-      continue;
+  if (activeReport === "monthly") {
+    return "month";
+  }
+
+  return "date";
+}
+
+function reportInputValue(activeReport, date) {
+  if (activeReport === "weekly") {
+    return isoWeekInputValue(date);
+  }
+
+  if (activeReport === "monthly") {
+    return formatMonthKey(date);
+  }
+
+  return formatDateKey(date);
+}
+
+function parseReportInputValue(activeReport, value, fallbackDate) {
+  if (!value) {
+    return fallbackDate;
+  }
+
+  if (activeReport === "weekly") {
+    return parseIsoWeekInputValue(value) ?? fallbackDate;
+  }
+
+  if (activeReport === "monthly") {
+    const [year, month] = value.split("-").map(Number);
+    if (Number.isInteger(year) && Number.isInteger(month)) {
+      return new Date(year, month - 1, 1);
     }
-
-    const weekStartKey = formatDateKey(startOfWeek(date));
-    let week = weeks.find((item) => item.key === weekStartKey);
-    if (!week) {
-      week = { key: weekStartKey, dates: [] };
-      weeks.push(week);
-    }
-
-    week.dates.push(date);
+    return fallbackDate;
   }
 
-  return weeks.map((week) => ({
-    ...week,
-    label: `${formatDateLabel(week.dates[0])} - ${formatDateLabel(week.dates[week.dates.length - 1])}`
-  }));
+  const [year, month, day] = value.split("-").map(Number);
+  if (Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(day)) {
+    return new Date(year, month - 1, day);
+  }
+
+  return fallbackDate;
 }
 
-function startOfWeek(date) {
-  const next = startOfDay(date);
-  const offset = next.getDay() === 0 ? -6 : 1 - next.getDay();
-  next.setDate(next.getDate() + offset);
-  return next;
-}
+function reportPeriodLabel(activeReport, date) {
+  if (activeReport === "weekly") {
+    return weekForDate(date).label;
+  }
 
-function startOfDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
+  if (activeReport === "monthly") {
+    return date.toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric"
+    });
+  }
 
-function formatWeekdayHeader(date) {
-  return date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short"
-  });
-}
-
-function formatDateLabel(date) {
   return date.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -517,89 +476,42 @@ function formatDateLabel(date) {
   });
 }
 
-function spreadsheetRow(values, styleId = "") {
-  const style = styleId ? ` ss:StyleID="${styleId}"` : "";
-  return `<Row>${values.map((value) => `<Cell${style}><Data ss:Type="${typeof value === "number" ? "Number" : "String"}">${escapeXml(value)}</Data></Cell>`).join("")}</Row>`;
-}
+function isCurrentReportPeriod(activeReport, date) {
+  const today = new Date();
 
-function escapeXml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function summarizeEmployee(employee, records, dates) {
-  const employeeRecords = records.filter(
-    (record) => record.employeeId === employee.id && dates.includes(record.date)
-  );
-  const officeDays = employeeRecords.filter((record) => record.status === "OFFICE").length;
-  const remoteDays = employeeRecords.filter((record) => record.status === "REMOTE").length;
-  return [employee.name, officeDays, remoteDays, dates.length - employeeRecords.length];
-}
-
-function summarizeEmployeeMonth(employee, records, dates) {
-  const employeeRecords = records.filter(
-    (record) => record.employeeId === employee.id && dates.includes(record.date)
-  );
-  const officeDays = employeeRecords.filter((record) => record.status === "OFFICE").length;
-  const remoteDays = employeeRecords.filter((record) => record.status === "REMOTE").length;
-  const lateCheckIns = employeeRecords.filter(
-    (record) => new Date(record.checkInTime).getHours() >= LATE_CHECK_IN_HOUR
-  ).length;
-
-  return [
-    employee.name,
-    dates.length,
-    officeDays,
-    remoteDays,
-    dates.length - employeeRecords.length,
-    lateCheckIns,
-    averageCheckInTime(employeeRecords)
-  ];
-}
-
-function averageCheckInTime(records) {
-  if (!records.length) {
-    return "-";
+  if (activeReport === "weekly") {
+    return weekForDate(date).key >= weekForDate(today).key;
   }
 
-  const totalMinutes = records.reduce((sum, record) => {
-    const checkIn = new Date(record.checkInTime);
-    return sum + checkIn.getHours() * 60 + checkIn.getMinutes();
-  }, 0);
-  const averageMinutes = Math.round(totalMinutes / records.length);
-  const hours = Math.floor(averageMinutes / 60);
-  const minutes = averageMinutes % 60;
-  return formatTime(new Date(2000, 0, 1, hours, minutes).toISOString());
-}
-
-function datesInCurrentWeek() {
-  const today = new Date();
-  const monday = new Date(today);
-  const offset = today.getDay() === 0 ? -6 : 1 - today.getDay();
-  monday.setDate(today.getDate() + offset);
-
-  return Array.from({ length: 5 }, (_, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index);
-    return formatDateKey(date);
-  });
-}
-
-function workingDatesInCurrentMonth() {
-  const today = new Date();
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const dates = [];
-
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(today.getFullYear(), today.getMonth(), day);
-    if (date.getDay() !== 0 && date.getDay() !== 6) {
-      dates.push(formatDateKey(date));
-    }
+  if (activeReport === "monthly") {
+    return formatMonthKey(date) >= formatMonthKey(today);
   }
 
-  return dates;
+  return formatDateKey(date) >= formatDateKey(today);
+}
+
+function isoWeekInputValue(date) {
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayNumber = (target.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNumber + 3);
+  const firstThursday = new Date(target.getFullYear(), 0, 4);
+  const firstThursdayDayNumber = (firstThursday.getDay() + 6) % 7;
+  firstThursday.setDate(firstThursday.getDate() - firstThursdayDayNumber + 3);
+  const weekNumber = 1 + Math.round((target - firstThursday) / 604800000);
+  return `${target.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+}
+
+function parseIsoWeekInputValue(value) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  const fourthOfJanuary = new Date(year, 0, 4);
+  const dayNumber = (fourthOfJanuary.getDay() + 6) % 7;
+  const monday = new Date(fourthOfJanuary);
+  monday.setDate(fourthOfJanuary.getDate() - dayNumber + (week - 1) * 7);
+  return monday;
 }
